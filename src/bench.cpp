@@ -10,6 +10,7 @@
 
 #include "thread_pool.hpp"
 #include "thread_pool_mpmc.hpp"
+#include "work_stealing_pool.hpp"
 
 using Clock = std::chrono::steady_clock;
 
@@ -279,6 +280,27 @@ static Result bench_thread_pool_mpmc(int pool_threads, uint64_t tasks, uint64_t 
   return {"thread_pool (mpmc queue)", pool_threads, tasks, ns};
 }
 
+static Result bench_thread_pool_ws(int pool_threads, uint64_t tasks, uint64_t work_iters_per_task) {
+  WorkStealingPool pool((size_t)pool_threads, 1 << 16, 1 << 16);
+
+  auto start = Clock::now();
+
+  for (uint64_t i = 0; i < tasks; i++) {
+    pool.push([&, work_iters_per_task]() {
+      (void)cpu_work(work_iters_per_task);
+    });
+  }
+
+  if (!pool.wait_idle_for(std::chrono::seconds(5))) {
+    std::cerr << "[WS] timeout; inflight=" << pool.inflight() << "\n";
+    pool.debug_dump();
+  }
+
+  uint64_t ns = ns_since(start);
+  pool.shutdown();
+  return {"thread_pool (work stealing)", pool_threads, tasks, ns};
+}
+
 int main() {
   const int hw = (int)std::thread::hardware_concurrency();
   const int max_threads = hw > 0 ? hw : 8;
@@ -328,6 +350,7 @@ int main() {
       if (t > max_threads) continue;
       print_result(bench_thread_pool_mutex(t, tasks, work_iters));
       print_result(bench_thread_pool_mpmc(t, tasks, work_iters));
+      print_result(bench_thread_pool_ws(t, tasks, work_iters));
       std::cout << "\n";
     }
   }

@@ -6,10 +6,10 @@
 #include <mutex>
 #include <thread>
 #include <vector>
-
+#include "concurrency/utils.hpp"
 #include "concurrency/mpmc_queue.hpp"
 
-static inline bool is_pow2(std::size_t x) { return x && ((x & (x - 1)) == 0); }
+
 
 // Thread pool using a lock-free bounded MPMC queue for jobs.
 // - Workers block (via CV) when no work is pending.
