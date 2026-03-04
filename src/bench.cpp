@@ -320,13 +320,16 @@ int main() {
   }
 
   const uint64_t tasks = 2'000'000;
-  const uint64_t work_iters = 50;
 
-  for (int t : {1, 2, 4, 8, 16, 32}) {
-    if (t > max_threads) continue;
-    print_result(bench_thread_pool_mutex(t, tasks, work_iters));
-    print_result(bench_thread_pool_mpmc(t, tasks, work_iters));
-    std::cout << "\n";
+  for (auto work_iters : {0ULL, 50ULL}) {
+    std::cout << "\n=== thread_pool tasks=" << tasks
+              << " work_iters=" << work_iters << " ===\n";
+    for (int t : {1, 2, 4, 8, 16, 32}) {
+      if (t > max_threads) continue;
+      print_result(bench_thread_pool_mutex(t, tasks, work_iters));
+      print_result(bench_thread_pool_mpmc(t, tasks, work_iters));
+      std::cout << "\n";
+    }
   }
 
   return 0;
