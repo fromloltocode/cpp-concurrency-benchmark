@@ -7,6 +7,12 @@
 #include <vector>
 #include <iomanip>
 
+=======
+#include <condition_variable>
+
+#include "thread_pool.hpp"
+
+
 using Clock = std::chrono::steady_clock;
 
 static inline uint64_t ns_since(const Clock::time_point& start) {
@@ -23,7 +29,11 @@ struct Result {
 static void print_result(const Result& r) {
   double sec = (double)r.ns / 1e9;
   double ops_sec = sec > 0 ? (double)r.ops / sec : 0.0;
+<<<<<<< HEAD
   std::cout << std::left << std::setw(30) << r.name
+=======
+  std::cout << std::left << std::setw(32) << r.name
+>>>>>>> 8e2b96d (Add bounded-queue thread pool + benchmark)
             << " threads=" << std::setw(2) << r.threads
             << " time=" << std::setw(8) << std::fixed << std::setprecision(3) << sec << "s"
             << " ops=" << r.ops
@@ -31,7 +41,13 @@ static void print_result(const Result& r) {
             << "\n";
 }
 
+<<<<<<< HEAD
 // 1) CPU-bound scaling
+=======
+// -----------------------------
+// 1) CPU-bound scaling
+// -----------------------------
+>>>>>>> 8e2b96d (Add bounded-queue thread pool + benchmark)
 static uint64_t cpu_work(uint64_t iters) {
   uint64_t x = 0x9e3779b97f4a7c15ULL;
   for (uint64_t i = 0; i < iters; i++) {
@@ -63,7 +79,13 @@ static Result bench_cpu_scale(int threads, uint64_t total_iters) {
   return {"cpu_scale (mix loop)", threads, per * (uint64_t)threads, ns};
 }
 
+<<<<<<< HEAD
 // 2) Atomic increment contention
+=======
+// -----------------------------
+// 2) Atomic increment contention
+// -----------------------------
+>>>>>>> 8e2b96d (Add bounded-queue thread pool + benchmark)
 static Result bench_atomic_inc(int threads, uint64_t iters_per_thread) {
   std::atomic<uint64_t> x{0};
   std::vector<std::thread> ts;
@@ -83,7 +105,13 @@ static Result bench_atomic_inc(int threads, uint64_t iters_per_thread) {
   return {"atomic_fetch_add (contended)", threads, iters_per_thread * (uint64_t)threads, ns};
 }
 
+<<<<<<< HEAD
 // 3) Mutex increment contention
+=======
+// -----------------------------
+// 3) Mutex increment contention
+// -----------------------------
+>>>>>>> 8e2b96d (Add bounded-queue thread pool + benchmark)
 static Result bench_mutex_inc(int threads, uint64_t iters_per_thread) {
   uint64_t x = 0;
   std::mutex m;
@@ -105,7 +133,13 @@ static Result bench_mutex_inc(int threads, uint64_t iters_per_thread) {
   return {"mutex++ (contended)", threads, iters_per_thread * (uint64_t)threads, ns};
 }
 
+<<<<<<< HEAD
 // 4) SPSC ring buffer
+=======
+// -----------------------------
+// 4) SPSC ring buffer throughput
+// -----------------------------
+>>>>>>> 8e2b96d (Add bounded-queue thread pool + benchmark)
 template <typename T, size_t CAP>
 struct SPSC {
   static_assert((CAP & (CAP - 1)) == 0, "CAP must be power of 2");
@@ -162,7 +196,13 @@ static Result bench_spsc(uint64_t messages) {
   return {"SPSC ring buffer", 2, messages, ns};
 }
 
+<<<<<<< HEAD
 // 5) False sharing: padded vs unpadded
+=======
+// -----------------------------
+// 5) False sharing: padded vs unpadded
+// -----------------------------
+>>>>>>> 8e2b96d (Add bounded-queue thread pool + benchmark)
 struct Counter { std::atomic<uint64_t> v{0}; };
 struct alignas(64) PaddedCounter { std::atomic<uint64_t> v{0}; char pad[64 - sizeof(std::atomic<uint64_t>)]{}; };
 
@@ -204,6 +244,46 @@ static Result bench_false_sharing_padded(int threads, uint64_t iters_per_thread)
   return {"false_sharing (padded)", threads, iters_per_thread * (uint64_t)threads, ns};
 }
 
+<<<<<<< HEAD
+=======
+// -----------------------------
+// 6) Thread pool benchmark (real step)
+// -----------------------------
+// Measures: cost of scheduling + executing many small tasks.
+// We use a latch-like counter and a CV to wait for completion.
+static Result bench_thread_pool(int pool_threads, uint64_t tasks, uint64_t work_iters_per_task) {
+  ThreadPool pool((size_t)pool_threads, 1 << 16);
+
+  std::atomic<uint64_t> remaining{tasks};
+  std::mutex m;
+  std::condition_variable cv;
+
+  auto start = Clock::now();
+
+  for (uint64_t i = 0; i < tasks; i++) {
+    pool.push([&, work_iters_per_task]() {
+      // do some tiny CPU work to avoid measuring only queue overhead
+      (void)cpu_work(work_iters_per_task);
+
+      if (remaining.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+        std::lock_guard<std::mutex> lk(m);
+        cv.notify_one();
+      }
+    });
+  }
+
+  // wait
+  {
+    std::unique_lock<std::mutex> lk(m);
+    cv.wait(lk, [&]() { return remaining.load(std::memory_order_acquire) == 0; });
+  }
+
+  uint64_t ns = ns_since(start);
+  pool.shutdown();
+  return {"thread_pool (bounded queue)", pool_threads, tasks, ns};
+}
+
+>>>>>>> 8e2b96d (Add bounded-queue thread pool + benchmark)
 int main() {
   const int hw = (int)std::thread::hardware_concurrency();
   const int max_threads = hw > 0 ? hw : 8;
@@ -213,8 +293,13 @@ int main() {
 
   const uint64_t cpu_total_iters = 300000000ULL;
   const uint64_t inc_iters = 30000000ULL;
+<<<<<<< HEAD
   const uint64_t fs_iters  = 30000000ULL;
   const uint64_t spsc_msgs = 20000000ULL; // start smaller, bump later
+=======
+  const uint64_t fs_iters  = 20000000ULL;
+  const uint64_t spsc_msgs = 20000000ULL;
+>>>>>>> 8e2b96d (Add bounded-queue thread pool + benchmark)
 
   for (int t : {1, 2, 4, 8, 16, 32}) {
     if (t > max_threads) continue;
@@ -244,5 +329,16 @@ int main() {
     std::cout << "\n";
   }
 
+<<<<<<< HEAD
+=======
+  // Thread pool benchmark: tune these if it's too slow/fast.
+  const uint64_t tasks = 2'000'000;          // 2M tasks
+  const uint64_t work_iters = 50;            // small per-task work
+  for (int t : {1, 2, 4, 8, 16, 32}) {
+    if (t > max_threads) continue;
+    print_result(bench_thread_pool(t, tasks, work_iters));
+  }
+
+>>>>>>> 8e2b96d (Add bounded-queue thread pool + benchmark)
   return 0;
 }
